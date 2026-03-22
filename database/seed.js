@@ -1,7 +1,16 @@
 const { db, Project, Task } = require('./setup');
 const bcrypt = require('bcryptjs');
+const { User } = require('./setup');
+const bcrypt = require('bcryptjs');
 // Sample project data
+// Hash passwords
+for (let user of sampleUsers) {
+    user.password = await bcrypt.hash(user.password, 10);
+}
 
+// Insert users
+await User.bulkCreate(sampleUsers);
+console.log('Sample users inserted successfully.');
 // Sample users (for when User model is added in step 5)
 const sampleUsers = [
   {
@@ -129,5 +138,6 @@ async function seedDatabase() {
         console.error('Error seeding database:', error);
     }
 }
+
 
 seedDatabase();

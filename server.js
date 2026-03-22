@@ -1,12 +1,22 @@
 const express = require('express');
-const { db, Project, Task } = require('./database/setup');
+const { db, Project, Task, User } = require('./database/setup'); // import all models at once
+const bcrypt = require('bcryptjs'); // for password hashing
+const session = require('express-session'); // for login sessions
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
 // Middleware
 app.use(express.json());
-
+app.use(session({
+    secret: 'secret-key',  // you can change this
+    resave: false,
+    saveUninitialized: false
+}));
+const authMiddleware = (req, res, next) => {
+    if (!req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+    req.userId = req.session.userId;
+    next();
+};
 // Test database connection
 async function testConnection() {
     try {
@@ -18,7 +28,34 @@ async function testConnection() {
 }
 
 testConnection();
+// REGISTER
+app.post('/api/register', async (req, res) => {
+    const { username, email, password } = req.body;
 
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) return res.status(400).json({ error: 'User already exists' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await User.create({ username, email, password: hashedPassword });
+
+    res.json({ message: 'User registered', userId: user.id });
+});
+
+// LOGIN
+app.post('/api/login', async (req, res) => {
+    const { email, password } = req.body;
+    const user = await User.findOne({ where: { email } });
+
+    if (!user) return res.status(401).json({ error: 'Invalid email' });
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ error: 'Invalid password' });
+
+    req.session.userId = user.id;
+    res.json({ message: 'Logged in' });
+});
+
+// LOGOUT
 // PROJECT ROUTES
 
 // GET /api/projects - Get all projects
@@ -52,14 +89,16 @@ app.get('/api/projects/:id', async (req, res) => {
 app.post('/api/projects', async (req, res) => {
     try {
         const { name, description, status, dueDate } = req.body;
-        
+
+        // For now, always assign tyler's userId
         const newProject = await Project.create({
             name,
             description,
             status,
-            dueDate
+            dueDate,
+            userId: 1
         });
-        
+
         res.status(201).json(newProject);
     } catch (error) {
         console.error('Error creating project:', error);
@@ -139,17 +178,18 @@ app.get('/api/tasks/:id', async (req, res) => {
 // POST /api/tasks - Create new task
 app.post('/api/tasks', async (req, res) => {
     try {
-        const { title, description, completed, priority, dueDate, projectId } = req.body;
-        
+        const { title, description, completed, priority, dueDate } = req.body;
+
+        // Assign to projectId 1 for testing (tyler's first project)
         const newTask = await Task.create({
             title,
             description,
             completed,
             priority,
             dueDate,
-            projectId
+            projectId: 1
         });
-        
+
         res.status(201).json(newTask);
     } catch (error) {
         console.error('Error creating task:', error);
